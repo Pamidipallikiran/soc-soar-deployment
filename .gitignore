@@ -1,0 +1,33 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime logs
+logs/
+*.log
+
+# TLS certificates / private keys
+ssl/
+*.key
+*.pem
+*.crt
+
+# Docker/runtime data
+data/
+tmp/
+*.db
+*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local backups
+*.backup
+docker-compose.yml.backup
