@@ -17,6 +17,10 @@ The project provides a practical SOC environment for:
 
 The deployment is designed primarily for **educational, research, and authorized security-lab environments**.
 
+
+<img width="1672" height="941" alt="Integrated SOC   SOAR Threat Pipeline" src="https://github.com/user-attachments/assets/fd8ffa56-ff15-4819-a1f2-cd745f6137b0" />
+
+
 ---
 
 ## Architecture
@@ -90,7 +94,6 @@ Examples of observables include:
 ### MISP
 
 Provides **threat-intelligence capabilities** and contextual information for investigating Indicators of Compromise (IOCs).
-<img width="3200" height="2000" alt="SOAR_OpenVAS_Pipeline" src="https://github.com/user-attachments/assets/08f8416f-8cba-4a62-a374-499397771603" />
 
 
 ---
