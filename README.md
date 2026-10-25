@@ -90,6 +90,8 @@ Examples of observables include:
 ### MISP
 
 Provides **threat-intelligence capabilities** and contextual information for investigating Indicators of Compromise (IOCs).
+<img width="3200" height="2000" alt="SOAR_OpenVAS_Pipeline" src="https://github.com/user-attachments/assets/08f8416f-8cba-4a62-a374-499397771603" />
+
 
 ---
 
