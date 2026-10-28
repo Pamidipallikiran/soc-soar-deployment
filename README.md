@@ -21,6 +21,16 @@ The deployment is designed primarily for **educational, research, and authorized
 <img width="1672" height="941" alt="Integrated SOC   SOAR Threat Pipeline" src="https://github.com/user-attachments/assets/fd8ffa56-ff15-4819-a1f2-cd745f6137b0" />
 
 
+
+
+
+
+https://github.com/user-attachments/assets/496ba892-486a-4eef-82ee-e373b1fa0f49
+
+
+
+
+
 ---
 
 ## Architecture
