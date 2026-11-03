@@ -1,232 +1,196 @@
 # SOC SOAR Deployment Lab
 
-## Wazuh + TheHive + Cortex + MISP
+![Docker Compose](https://img.shields.io/badge/Docker%20Compose-ready-2496ED?logo=docker&logoColor=white)
+![TheHive](https://img.shields.io/badge/TheHive-5.2-F5A623)
+![Cortex](https://img.shields.io/badge/Cortex-analyzers-blue)
+![MISP](https://img.shields.io/badge/MISP-threat%20intel-red)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Use](https://img.shields.io/badge/use-lab%20%2F%20education-lightgrey)
 
-A containerized Security Operations Center (SOC) laboratory demonstrating the integration of **SIEM, Security Orchestration, Automation and Response (SOAR), observable analysis, and threat intelligence** platforms.
+A Docker Compose lab that deploys **TheHive** (case management), **Cortex** (automated observable analysis) and **MISP** (threat intelligence) together, so a SOC analyst can take an alert from *detection* to *investigation* to *enrichment* in one environment.
 
-The project provides a practical SOC environment for:
+> **Scope note:** Wazuh (SIEM) is part of the intended SOC architecture, but it is **not** deployed by this Compose file. This repository covers the SOAR and threat-intelligence layer. See [Roadmap](#roadmap).
 
-* Security alert monitoring
-* Incident investigation
-* Automated case management
-* Observable enrichment
-* Threat-intelligence correlation
-* IOC investigation
-* Security automation
-* Blue-team incident-response workflows
+---
 
-The deployment is designed primarily for **educational, research, and authorized security-lab environments**.
+## Table of contents
 
+- [How it works (in plain words)](#how-it-works-in-plain-words)
+- [Architecture](#architecture)
+- [Components](#components)
+- [Quick start](#quick-start)
+- [Service endpoints](#service-endpoints)
+- [Example investigation](#example-investigation)
+- [Repository structure](#repository-structure)
+- [Operations and troubleshooting](#operations-and-troubleshooting)
+- [Security notes](#security-notes)
+- [Roadmap](#roadmap)
+- [Skills demonstrated](#skills-demonstrated)
+- [Disclaimer](#disclaimer)
+- [Author](#author)
 
-<img width="1672" height="941" alt="Integrated SOC   SOAR Threat Pipeline" src="https://github.com/user-attachments/assets/fd8ffa56-ff15-4819-a1f2-cd745f6137b0" />
+---
 
+## How it works (in plain words)
 
+Think of a hospital emergency room:
 
-
-
-
-https://github.com/user-attachments/assets/496ba892-486a-4eef-82ee-e373b1fa0f49
-
-
-
-
+| In the hospital | In this lab |
+|---|---|
+| Alarm goes off at a patient's bed | **Alert** from a SIEM such as Wazuh |
+| Patient file is opened | **Case** in TheHive |
+| Lab runs blood tests | **Cortex** analyzes IPs, domains, URLs, hashes |
+| Doctor checks the known-disease database | **MISP** shows whether an indicator is already known as malicious |
+| Doctor decides treatment | **Analyst** decides: false positive, monitor, or respond |
 
 ---
 
 ## Architecture
 
-The overall SOC workflow integrates Wazuh with the SOAR and threat-intelligence components.
+```mermaid
+flowchart TD
+    A[Endpoints<br/>Linux / Windows] -->|security events| B[Wazuh SIEM<br/>detection and alerts]
+    B -->|alert| C[TheHive<br/>case management]
+    C -->|observables| D[Cortex<br/>analyzers and enrichment]
+    C -->|IOC lookup| E[MISP<br/>threat intelligence]
+    D --> F[SOC analyst<br/>decision]
+    E --> F
+    F --> G{Outcome}
+    G --> H[False positive]
+    G --> I[Monitor]
+    G --> J[Respond]
 
-```text
-                         ┌─────────────────────┐
-                         │      Endpoints      │
-                         │   Linux / Windows   │
-                         └──────────┬──────────┘
-                                    │
-                                    │ Security Events
-                                    ▼
-                         ┌─────────────────────┐
-                         │       Wazuh         │
-                         │        SIEM         │
-                         │ Detection & Alerts  │
-                         └──────────┬──────────┘
-                                    │
-                                    │ Alert / Incident
-                                    ▼
-                         ┌─────────────────────┐
-                         │      TheHive        │
-                         │  Case Management    │
-                         │   Investigation     │
-                         └──────┬────────┬─────┘
-                                │        │
-                         Observable      │ Threat
-                         Analysis        │ Intelligence
-                                │        │
-                                ▼        ▼
-                    ┌──────────────┐  ┌──────────────┐
-                    │    Cortex    │  │     MISP     │
-                    │  Analyzers   │  │     CTI      │
-                    │  Enrichment  │  │ IOC Context  │
-                    └──────┬───────┘  └──────┬───────┘
-                           │                 │
-                           └────────┬────────┘
-                                    ▼
-                         ┌─────────────────────┐
-                         │     SOC Analyst     │
-                         │ Investigation &     │
-                         │ Response Decision   │
-                         └─────────────────────┘
+    classDef planned stroke-dasharray: 5 5;
+    class A,B planned;
 ```
 
-### Architecture Roles
-
-### Wazuh
-
-Acts as the **SIEM and security-monitoring layer**. It collects security events, analyzes logs, monitors endpoints, and generates security alerts.
-
-### TheHive
-
-Acts as the **SOC case-management and investigation platform**. Security alerts can be converted into investigation cases that can be assigned, tracked, enriched, and closed by analysts.
-
-### Cortex
-
-Provides **automated observable analysis and enrichment**.
-
-Examples of observables include:
-
-* IP addresses
-* Domains
-* URLs
-* File hashes
-* Email addresses
-* Other security observables
-
-### MISP
-
-Provides **threat-intelligence capabilities** and contextual information for investigating Indicators of Compromise (IOCs).
-
+Dashed boxes are outside this Compose stack (planned integration).
 
 ---
 
-# Project Objective
+## Components
 
-The primary objective is to build an integrated SOC environment in which security alerts can move from **detection to investigation, enrichment, and response**.
+**Deployed by `docker-compose.yml`**
 
-The lab demonstrates a workflow similar to a real-world SOC:
+| Service | Image | Role |
+|---|---|---|
+| `thehive` | `strangebee/thehive:5.2` | Case management and investigation |
+| `cortex.local` | `thehiveproject/cortex:latest` | Runs analyzers and responders on observables |
+| `misp.local` | `coolacid/misp-docker:core-latest` | Threat-intelligence platform |
+| `misp-modules` | `coolacid/misp-docker:modules-latest` | MISP enrichment modules |
+| `cassandra` | `cassandra:4` | TheHive database |
+| `elasticsearch` | `elasticsearch:7.17.9` | Search index (TheHive, Cortex) |
+| `minio` | `quay.io/minio/minio` | S3-compatible object storage for TheHive |
+| `misp_mysql` | `mysql/mysql-server:5.7` | MISP database |
+| `redis` | `redis:latest` | MISP cache and queue |
 
-```text
-Security Event
-      │
-      ▼
-Wazuh Detection
-      │
-      ▼
-Security Alert
-      │
-      ▼
-TheHive Investigation Case
-      │
-      ├───────────────┐
-      ▼               ▼
-   Cortex            MISP
-   Analysis          Threat Intelligence
-      │               │
-      └───────┬───────┘
-              ▼
-       IOC Enrichment
-              │
-              ▼
-       Analyst Investigation
-              │
-              ▼
-       Response Decision
+All services share one Docker bridge network, `SOC_NET`.
+
+---
+
+## Quick start
+
+### Prerequisites
+
+- Linux host with **Docker Engine** and **Docker Compose v2**
+- Git
+- Internet access (images and analyzer repository are downloaded)
+- **8 GB RAM recommended** for the full stack (TheHive alone is capped at 1.5 GB; Cassandra, MISP and MySQL need more on top)
+
+```bash
+docker --version
+docker compose version
+git --version
 ```
 
----
+### 1. Clone
 
-# Key Features
+```bash
+git clone https://github.com/Pamidipallikiran/soc-soar-deployment.git
+cd soc-soar-deployment
+```
 
-* Containerized SOAR deployment
-* Docker Compose-based deployment
-* TheHive case management
-* Cortex observable analysis
-* Cortex analyzer integration
-* MISP threat-intelligence platform
-* MISP supporting data and objects
-* Environment-based configuration
-* Secret separation using `.env`
-* Automated Cortex analyzer setup
-* SOC incident-response workflow
-* IOC enrichment
-* Linux-based deployment
-* Security-focused deployment documentation
+### 2. Configure secrets
 
----
+```bash
+cp .env.example .env
+nano .env
+```
 
-# Components
+Replace every `change-me` value. Generate strong secrets with:
 
-| Component      | Role                                                           |
-| -------------- | -------------------------------------------------------------- |
-| Wazuh          | SIEM, endpoint monitoring, log analysis and security detection |
-| TheHive        | SOC case management and investigation                          |
-| Cortex         | Observable analysis and enrichment                             |
-| MISP           | Threat intelligence and IOC correlation                        |
-| Cassandra      | TheHive data storage                                           |
-| Elasticsearch  | Search and indexing backend                                    |
-| MinIO          | Object storage                                                 |
-| MySQL          | MISP database                                                  |
-| Redis          | MISP supporting service                                        |
-| MISP Modules   | MISP enrichment functionality                                  |
-| Docker         | Container runtime                                              |
-| Docker Compose | Multi-container deployment                                     |
+```bash
+openssl rand -hex 32
+```
 
----
+`.env` is git-ignored. Never commit it.
 
-# Technology Stack
+### 3. Validate the configuration
 
-### Security Platforms
+```bash
+docker compose --env-file .env config > /dev/null && echo "Config OK"
+```
 
-* Wazuh
-* TheHive
-* Cortex
-* MISP
+### 4. Install the Cortex analyzers
 
-### Infrastructure
+```bash
+./scripts/setup-cortex-analyzers.sh
+```
 
-* Docker
-* Docker Compose
-* Linux
-* Cassandra
-* Elasticsearch
-* MySQL
-* Redis
-* MinIO
+This prepares the `Cortex-Analyzers/` folder that the Cortex container mounts. See [`cortex/README.md`](cortex/README.md) for details.
 
-### Security Operations
+### 5. Start the stack
 
-* SIEM
-* SOAR
-* Threat Intelligence
-* IOC Investigation
-* Incident Response
-* Security Monitoring
-* Observable Enrichment
-* MITRE ATT&CK concepts
-* Blue-team workflows
+```bash
+docker compose up -d
+docker compose ps
+```
+
+First start can take several minutes while MISP initializes. Follow progress with `docker compose logs -f misp.local`.
 
 ---
 
-# Repository Structure
+## Service endpoints
+
+| Service | URL | Port |
+|---|---|---:|
+| TheHive | `http://<HOST-IP>:9000` | 9000 |
+| Cortex | `http://<HOST-IP>:9001` | 9001 |
+| MinIO console | `http://<HOST-IP>:9002` | 9002 |
+| MISP | `http://<HOST-IP>` / `https://<HOST-IP>` | 80 / 443 |
+| Elasticsearch | `http://<HOST-IP>:9200` | 9200 |
+| Cassandra | `<HOST-IP>:9042` | 9042 |
+
+Check the [security notes](#security-notes) before exposing any of these beyond your own machine.
+
+---
+
+## Example investigation
+
+**Scenario:** an employee reports a suspicious email, and the SIEM raises an alert about a connection to an unknown IP.
+
+1. **Case** – The analyst opens a case in TheHive and adds the sender domain, the IP and the attachment hash as *observables*.
+2. **Analyze** – From TheHive, the analyst runs Cortex analyzers on each observable (for example an IP reputation check and a file-hash lookup).
+3. **Check intelligence** – The same indicators are searched in MISP to see whether they appear in known campaigns.
+4. **Decide** – The results are combined with endpoint context:
+   - Clean everywhere → close as **false positive**
+   - Suspicious but unproven → keep **monitoring**
+   - Known malicious → **respond** (block the indicator, isolate the host, escalate)
+
+Which analyzers are available depends on what is installed and configured in your Cortex instance.
+
+---
+
+## Repository structure
 
 ```text
-soar-deployment-lab/
-│
+soc-soar-deployment/
 ├── cortex/
-│   ├── application.conf
-│   ├── README.md
-│   └── logs/
-│
-├── files/
+│   ├── application.conf        # Cortex configuration
+│   └── README.md               # Cortex-specific notes
+├── docs/
+│   └── SOAR_Deployment_with_MISP.pdf
+├── files/                      # MISP supporting data
 │   ├── community-metadata/
 │   ├── feed-metadata/
 │   ├── misp-decaying-models/
@@ -235,1054 +199,91 @@ soar-deployment-lab/
 │   ├── misp-workflow-blueprints/
 │   ├── noticelists/
 │   └── scripts/
-│
 ├── scripts/
 │   └── setup-cortex-analyzers.sh
-│
-├── server-configs/
-│   ├── bootstrap.php
-│   ├── core.php
-│   └── routes.php
-│
+├── server-configs/             # MISP configuration (bootstrap, core, routes)
 ├── docker-compose.yml
-├── .env.example
+├── .env.example                # Template for secrets (copy to .env)
 ├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
 ---
 
-# Prerequisites
+## Operations and troubleshooting
 
-The following software is recommended before deploying the environment:
+| Task | Command |
+|---|---|
+| Status of all containers | `docker compose ps` |
+| Last 100 log lines, all services | `docker compose logs --tail=100` |
+| Follow one service | `docker compose logs -f thehive` |
+| Restart one service | `docker compose restart cortex.local` |
+| Stop the stack (keep data) | `docker compose down` |
+| Stop and **delete all data** | `docker compose down -v` |
 
-* Linux host
-* Docker Engine
-* Docker Compose
-* Git
-* Internet connectivity for downloading required images and analyzer repositories
-* Sufficient CPU, RAM, and disk resources for the complete stack
+| Symptom | What to check |
+|---|---|
+| Container keeps restarting | `docker compose logs --tail=100 <service>`; look for DB connection or memory errors |
+| "variable is not set" warnings | `.env` is missing or a value is empty; compare with `.env.example` |
+| Cortex shows no analyzers | Re-run `./scripts/setup-cortex-analyzers.sh`, then check `docker compose logs cortex.local` |
+| TheHive cannot start | Cassandra and Elasticsearch must be up first; give them a minute, then check logs |
+| Elasticsearch exits immediately | Host may need `sudo sysctl -w vm.max_map_count=262144` |
 
-Verify Docker:
+---
+
+## Security notes
+
+This is a **lab**, not a hardened production deployment.
+
+- **Secrets** – Keep real values only in `.env`. Never commit keys, passwords or certificates (the `.gitignore` already blocks `.env`, `*.pem`, `*.key`, `*.crt`, `*.p12`, `*.pfx`, `*.jks`, logs and databases).
+- **Published ports** – The Compose file publishes services on `0.0.0.0`. Elasticsearch runs with `xpack.security.enabled=false`, so port 9200 has **no authentication**. Run this on an isolated host or VM, or bind ports to `127.0.0.1` / firewall them.
+- **Docker socket** – Cortex mounts `/var/run/docker.sock` so it can start analyzer containers. Anyone who controls that container can control the Docker host.
+- **Image tags** – `cortex` and `redis` use `latest`. Pin versions for reproducible builds.
+- **Default passwords** – Change every `change-me` value before first start.
+
+Before committing, confirm no secrets are tracked:
 
 ```bash
-docker --version
-```
-
-Verify Docker Compose:
-
-```bash
-docker compose version
-```
-
-Verify Git:
-
-```bash
-git --version
+git ls-files | grep -E '(^|/)\.env$|\.(key|pem|p12|pfx|jks)$'   # should print nothing
 ```
 
 ---
 
-# Deployment
+## Roadmap
 
-## 1. Clone the Repository
-
-Clone the repository:
-
-```bash
-git clone https://github.com/Pamidipallikiran/soc-soar-deployment.git
-```
-
-Enter the project directory:
-
-```bash
-cd soc-soar-deployment
-```
+- [ ] Add Wazuh and forward alerts to TheHive
+- [ ] Automatic observable extraction and Cortex enrichment on new alerts
+- [ ] Two-way MISP integration
+- [ ] MITRE ATT&CK mapping on cases
+- [ ] Health checks and pinned image versions
+- [ ] TLS and reverse proxy
+- [ ] Backup and restore scripts
+- [ ] CI check that validates `docker compose config`
+- [ ] Screenshots of a working case, analyzer report and MISP event in `docs/`
 
 ---
 
-## 2. Create the Environment File
+## Skills demonstrated
 
-Copy the example environment configuration:
-
-```bash
-cp .env.example .env
-```
-
-Edit the environment file:
-
-```bash
-nano .env
-```
-
-Replace all placeholder values with deployment-specific credentials and secrets.
-
-Example:
-
-```text
-THEHIVE_SECRET=<strong-random-secret>
-MINIO_ROOT_PASSWORD=<strong-password>
-MISP_DB_PASSWORD=<strong-password>
-MISP_DB_ROOT_PASSWORD=<strong-password>
-```
-
-Generate a random secret when required:
-
-```bash
-openssl rand -hex 32
-```
-
-### Important
-
-The `.env` file contains deployment secrets and **must not be committed to GitHub**.
-
-Only `.env.example` should be stored in the repository.
+- **SOAR and case management** – TheHive deployment and configuration
+- **Observable analysis** – Cortex analyzer setup and Docker-based execution
+- **Threat intelligence** – MISP deployment with galaxies, objects, feeds and noticelists
+- **Containers** – multi-service Docker Compose, volumes, networks, environment-based configuration
+- **Security hygiene** – secret separation with `.env`, `.gitignore` rules, documented risks
+- **SOC workflow** – alert, triage, enrichment, decision
 
 ---
 
-# 3. Validate Docker Compose Configuration
+## Disclaimer
 
-Before starting the services, validate the Compose configuration:
-
-```bash
-docker compose --env-file .env.example config
-```
-
-For the actual deployment configuration:
-
-```bash
-docker compose --env-file .env config
-```
-
-Resolve any configuration errors before starting the stack.
+For education, research and **authorized** lab use only. Do not run against systems or networks you do not have permission to test. Harden the deployment (authentication, TLS, network controls, backups) before any production use.
 
 ---
 
-# 4. Install Cortex Analyzers
+## Author
 
-The Cortex analyzer repository is maintained separately.
+**Kiran Pamidipalli** – aspiring SOC Analyst
+GitHub: [@Pamidipallikiran](https://github.com/Pamidipallikiran)
 
-Run:
-
-```bash
-./scripts/setup-cortex-analyzers.sh
-```
-
-The script prepares the Cortex analyzer environment used by the deployment.
-
-Verify the project directory:
-
-```bash
-ls -la
-```
-
-Review the Cortex-specific documentation:
-
-```bash
-cat cortex/README.md
-```
-
----
-
-# 5. Start the SOAR Stack
-
-Start the services in detached mode:
-
-```bash
-docker compose up -d
-```
-
-Check the containers:
-
-```bash
-docker compose ps
-```
-
-View all service logs:
-
-```bash
-docker compose logs -f
-```
-
----
-
-# Service-Specific Logs
-
-### TheHive
-
-```bash
-docker compose logs -f thehive
-```
-
-### Cortex
-
-```bash
-docker compose logs -f cortex.local
-```
-
-### MISP
-
-```bash
-docker compose logs -f misp.local
-```
-
-To view only the latest entries:
-
-```bash
-docker compose logs --tail=100
-```
-
----
-
-# Service Access
-
-The default service ports used by the environment are:
-
-| Service       |   Port |
-| ------------- | -----: |
-| TheHive       | `9000` |
-| Cortex        | `9001` |
-| MinIO Console | `9002` |
-| Elasticsearch | `9200` |
-| Cassandra     | `9042` |
-| MISP HTTP     |   `80` |
-| MISP HTTPS    |  `443` |
-
-The actual hostname or IP address depends on the host and network configuration.
-
-Example:
-
-```text
-TheHive  → http://<HOST-IP>:9000
-Cortex   → http://<HOST-IP>:9001
-MinIO    → http://<HOST-IP>:9002
-MISP     → http://<HOST-IP>/
-```
-
-Do not expose these services directly to untrusted networks without appropriate security controls.
-
----
-
-# SOC Investigation Workflow
-
-A typical SOC investigation can follow this workflow:
-
-```text
-┌──────────────────────┐
-│   Security Event     │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│   Wazuh Detection    │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│   Alert Forwarding   │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│   TheHive Case       │
-│    Investigation     │
-└──────────┬───────────┘
-           │
-           ├──────────────────┐
-           │                  │
-           ▼                  ▼
-┌──────────────────┐  ┌──────────────────┐
-│     Cortex       │  │      MISP        │
-│ Observable       │  │ Threat           │
-│ Analysis         │  │ Intelligence     │
-└────────┬─────────┘  └────────┬─────────┘
-         │                     │
-         └──────────┬──────────┘
-                    ▼
-          ┌────────────────────┐
-          │   IOC Enrichment   │
-          └──────────┬─────────┘
-                     │
-                     ▼
-          ┌────────────────────┐
-          │    SOC Analyst     │
-          │    Investigation   │
-          └──────────┬─────────┘
-                     │
-                     ▼
-             Response Decision
-                     │
-          ┌──────────┼──────────┐
-          ▼          ▼          ▼
-     False Positive  Monitor   Respond
-```
-
----
-
-# Observable Investigation
-
-During an investigation, an analyst may encounter observables such as:
-
-```text
-IP Address
-Domain
-URL
-File Hash
-Email Address
-Hostname
-```
-
-These observables can be investigated using Cortex analyzers and MISP threat intelligence.
-
-Example investigation flow:
-
-```text
-Suspicious IP
-     │
-     ▼
-TheHive Observable
-     │
-     ├──────────────► Cortex Analyzer
-     │                     │
-     │                     ▼
-     │              Analysis Result
-     │
-     └──────────────► MISP
-                           │
-                           ▼
-                    Threat Context
-                           │
-                           ▼
-                    Analyst Decision
-```
-
----
-
-# Wazuh Integration
-
-Wazuh provides the security-detection layer of the SOC architecture.
-
-Typical events may include:
-
-* Authentication failures
-* Suspicious processes
-* File-integrity changes
-* Network-security events
-* Malware detections
-* Custom IDS alerts
-* Windows security events
-* Linux security events
-
-A Wazuh alert can be forwarded into the SOAR workflow for further investigation.
-
-Conceptually:
-
-```text
-Wazuh Alert
-     │
-     ▼
-Alert Integration
-     │
-     ▼
-TheHive Case
-     │
-     ▼
-Observable Extraction
-     │
-     ├── IP
-     ├── Domain
-     ├── Hash
-     └── URL
-     │
-     ▼
-Cortex / MISP Enrichment
-```
-
-> **Note:** Wazuh is part of the overall SOC architecture. The Docker Compose deployment in this repository focuses on the SOAR, analysis, and threat-intelligence components.
-
----
-
-# TheHive Case Management
-
-TheHive provides the investigation workspace for SOC analysts.
-
-A case can contain:
-
-* Case title
-* Description
-* Severity
-* TLP classification
-* PAP classification
-* Observables
-* Tasks
-* Analyst notes
-* Evidence
-* Investigation results
-* Response actions
-
-A typical case lifecycle is:
-
-```text
-Alert
-  ↓
-Case Creation
-  ↓
-Triage
-  ↓
-Observable Extraction
-  ↓
-Enrichment
-  ↓
-Investigation
-  ↓
-Containment / Response
-  ↓
-Case Closure
-```
-
----
-
-# Cortex Analysis
-
-Cortex is used to automate observable analysis.
-
-Examples include:
-
-```text
-IP Address
-    ↓
-IP Reputation / Threat Intelligence Analyzer
-
-Domain
-    ↓
-Domain Reputation / DNS Analyzer
-
-Hash
-    ↓
-Hash / Malware Intelligence Analyzer
-
-URL
-    ↓
-URL Reputation Analyzer
-```
-
-Analyzer availability depends on the analyzers installed and configured in the deployment.
-
----
-
-# MISP Threat Intelligence
-
-MISP provides threat-intelligence capabilities for IOC investigation and correlation.
-
-The environment contains supporting MISP data such as:
-
-* MISP Galaxy information
-* MISP objects
-* Decaying models
-* Noticelists
-* Feed metadata
-* Community metadata
-* Workflow blueprints
-
-MISP can be used to provide additional context around suspicious indicators.
-
-Typical investigation:
-
-```text
-IOC
- │
- ▼
-MISP Search
- │
- ├── Known Indicator
- ├── Related Event
- ├── Threat Actor
- ├── Malware
- └── Campaign
- │
- ▼
-Threat Context
- │
- ▼
-SOC Investigation
-```
-
----
-
-# Incident Response Example
-
-A sample SOC incident can be represented as:
-
-### Scenario
-
-A monitored endpoint generates a suspicious network-security alert.
-
-### Detection
-
-Wazuh receives the event and generates an alert.
-
-### Triage
-
-The alert is forwarded to the investigation workflow.
-
-### Case Creation
-
-TheHive is used to create an investigation case.
-
-### Observable Extraction
-
-The analyst identifies:
-
-```text
-Source IP
-Destination IP
-Domain
-File Hash
-```
-
-### Enrichment
-
-Cortex analyzers are used to investigate the observables.
-
-MISP is queried for additional threat-intelligence context.
-
-### Investigation
-
-The SOC analyst correlates:
-
-```text
-Wazuh Detection
-       +
-Cortex Analysis
-       +
-MISP Intelligence
-       +
-Endpoint Context
-```
-
-### Response
-
-Depending on the findings, the analyst may:
-
-* Mark the alert as a false positive
-* Continue monitoring
-* Block an indicator
-* Isolate an endpoint
-* Escalate the incident
-* Collect additional evidence
-* Perform further investigation
-
----
-
-# Validation and Testing
-
-## Check Running Containers
-
-```bash
-docker compose ps
-```
-
-All required services should show an appropriate running or healthy state.
-
----
-
-## Check Logs
-
-```bash
-docker compose logs --tail=100
-```
-
-Look for:
-
-* Startup errors
-* Database connection failures
-* Authentication errors
-* Network connectivity issues
-* Analyzer errors
-* Container restart loops
-
----
-
-## Check Individual Services
-
-```bash
-docker compose logs --tail=100 thehive
-```
-
-```bash
-docker compose logs --tail=100 cortex.local
-```
-
-```bash
-docker compose logs --tail=100 misp.local
-```
-
----
-
-## Validate Configuration
-
-```bash
-docker compose --env-file .env config
-```
-
-A successful configuration render indicates that Docker Compose can resolve the supplied environment variables and service configuration.
-
----
-
-# Troubleshooting
-
-## Containers Are Not Starting
-
-Check:
-
-```bash
-docker compose ps
-```
-
-Then:
-
-```bash
-docker compose logs --tail=100 <service-name>
-```
-
----
-
-## Environment Variables Are Missing
-
-Verify that `.env` exists:
-
-```bash
-ls -la .env
-```
-
-Check the example configuration:
-
-```bash
-cat .env.example
-```
-
-Do not expose actual secrets when sharing configuration publicly.
-
----
-
-## Cortex Analyzer Problems
-
-Check the analyzer installation:
-
-```bash
-./scripts/setup-cortex-analyzers.sh
-```
-
-Then review:
-
-```bash
-docker compose logs --tail=100 cortex.local
-```
-
-Also review:
-
-```text
-cortex/README.md
-```
-
----
-
-## Database Connectivity Problems
-
-Check the relevant container status:
-
-```bash
-docker compose ps
-```
-
-Review service logs:
-
-```bash
-docker compose logs --tail=100
-```
-
-Confirm that dependent services have successfully started before troubleshooting application-level connectivity.
-
----
-
-# Security Considerations
-
-This repository is intended for an **isolated security laboratory environment**.
-
-Do not treat the default configuration as production-ready.
-
-## Secrets
-
-Never commit:
-
-* `.env`
-* API keys
-* Passwords
-* Authentication tokens
-* Private keys
-* TLS private material
-* Production credentials
-* Real threat-intelligence credentials
-
-The repository provides `.env.example` as a safe configuration template.
-
----
-
-## Docker Socket
-
-The Cortex deployment may require access to:
-
-```text
-/var/run/docker.sock
-```
-
-Docker socket access can provide significant privileges over the Docker host.
-
-Therefore:
-
-* Use this configuration only in a controlled environment.
-* Avoid exposing the host to untrusted users.
-* Understand the security implications before enabling analyzer execution.
-* Apply appropriate isolation and hardening for production environments.
-
----
-
-## Network Exposure
-
-The Compose configuration publishes service ports to the host.
-
-For production deployments, consider:
-
-* Firewall rules
-* Network segmentation
-* TLS
-* Reverse proxy
-* Authentication
-* Role-based access control
-* Restricted management interfaces
-* Monitoring
-* Secure secret management
-
----
-
-## Credential Management
-
-Use strong, unique credentials for:
-
-* TheHive
-* Cortex
-* MISP
-* MySQL
-* MinIO
-* Other supporting services
-
-Never use example credentials in a production environment.
-
----
-
-# Git and Repository Security
-
-The repository uses `.gitignore` to prevent accidental tracking of sensitive or runtime files.
-
-Protected file types include:
-
-```text
-.env
-*.key
-*.pem
-*.crt
-*.p12
-*.pfx
-*.jks
-*.log
-*.db
-*.sqlite
-```
-
-Before committing changes, verify:
-
-```bash
-git status
-```
-
-Check whether sensitive files are tracked:
-
-```bash
-git ls-files | grep -E '(^|/)\.env$'
-```
-
-Check certificate/private-key files:
-
-```bash
-git ls-files | grep -E '\.(key|pem|p12|pfx|jks)$'
-```
-
-These commands should normally return no output.
-
----
-
-# Development Workflow
-
-After modifying the project:
-
-```bash
-git status
-```
-
-Review changes:
-
-```bash
-git diff
-```
-
-Stage changes:
-
-```bash
-git add <file>
-```
-
-Create a commit:
-
-```bash
-git commit -m "Describe the change"
-```
-
-Push to GitHub:
-
-```bash
-git push
-```
-
-Check synchronization:
-
-```bash
-git status
-```
-
-Expected result:
-
-```text
-Your branch is up to date with 'origin/main'.
-
-nothing to commit, working tree clean
-```
-
----
-
-# Skills Demonstrated
-
-This project demonstrates practical experience in:
-
-### SOC Operations
-
-* SOC architecture
-* Security monitoring
-* Alert triage
-* Incident investigation
-* Incident-response workflows
-* IOC investigation
-
-### SIEM
-
-* Wazuh deployment
-* Endpoint monitoring
-* Log analysis
-* Security detection
-* Alert management
-
-### SOAR
-
-* TheHive deployment
-* Case management
-* Investigation workflows
-* Security automation concepts
-* Alert-to-case workflows
-
-### Threat Intelligence
-
-* MISP deployment
-* IOC enrichment
-* Threat-intelligence correlation
-* MISP objects and Galaxy data
-
-### Security Analysis
-
-* Cortex
-* Observable analysis
-* Automated enrichment
-* Analyzer integration
-
-### Infrastructure
-
-* Linux administration
-* Docker
-* Docker Compose
-* Elasticsearch
-* Cassandra
-* MySQL
-* Redis
-* MinIO
-
-### Security Engineering
-
-* Environment-based configuration
-* Secret management
-* Network segmentation concepts
-* Container security considerations
-* Blue-team architecture
-
----
-
-# Future Improvements
-
-Potential enhancements for the project include:
-
-* Automated Wazuh-to-TheHive alert integration
-* Automated IOC extraction
-* Automated Cortex enrichment
-* MISP bidirectional enrichment
-* MITRE ATT&CK mapping
-* Automated response actions
-* IOC deduplication
-* Threat-intelligence correlation
-* Case severity automation
-* Analyst dashboards
-* Security metrics and reporting
-* Automated incident classification
-* Alert correlation
-* Detection-rule management
-* TLS and reverse-proxy hardening
-* Role-based access control
-* Backup and recovery automation
-* Centralized monitoring
-* Health checks
-* CI/CD validation
-* Infrastructure-as-Code deployment
-
----
-
-# Screenshots
-
-Screenshots can be added to document the working deployment.
-
-Recommended screenshots include:
-
-```text
-docs/
-└── screenshots/
-    ├── wazuh-alert.png
-    ├── thehive-case.png
-    ├── cortex-analyzer.png
-    ├── misp-event.png
-    ├── docker-services.png
-    └── architecture.png
-```
-
-Suggested documentation flow:
-
-```text
-Wazuh Alert
-     ↓
-TheHive Case
-     ↓
-Observable
-     ↓
-Cortex Analysis
-     ↓
-MISP Enrichment
-     ↓
-Analyst Investigation
-```
-
----
-
-# Project Status
-
-| Area                       | Status                  |
-| -------------------------- | ----------------------- |
-| Docker deployment          | Implemented             |
-| Docker Compose             | Implemented             |
-| TheHive                    | Implemented             |
-| Cortex                     | Implemented             |
-| MISP                       | Implemented             |
-| Cortex analyzer setup      | Implemented             |
-| Environment configuration  | Implemented             |
-| Secret protection          | Implemented             |
-| SOC investigation workflow | Documented              |
-| Wazuh integration          | Architecture documented |
-| Automated enrichment       | Extensible              |
-| Automated response         | Future improvement      |
-
----
-
-# Learning Outcomes
-
-This project provides hands-on experience with the integration of multiple security technologies into a SOC environment.
-
-The main learning outcomes include:
-
-* Understanding SIEM and SOAR architecture
-* Deploying security platforms using containers
-* Managing multi-container applications
-* Investigating security alerts
-* Working with security observables
-* Performing IOC enrichment
-* Using threat-intelligence platforms
-* Understanding incident-response workflows
-* Managing secrets securely
-* Troubleshooting distributed security applications
-* Designing a practical blue-team environment
-
----
-
-# Disclaimer
-
-This project is intended for:
-
-* Educational purposes
-* Cybersecurity research
-* Authorized security testing
-* SOC/blue-team laboratory environments
-
-Do not deploy this configuration directly into a production environment without performing appropriate:
-
-* Security hardening
-* Credential management
-* Network segmentation
-* Access control
-* TLS configuration
-* Monitoring
-* Backup and recovery planning
-* Vulnerability assessment
-* Security testing
-
-Use only against systems and networks for which you have explicit authorization.
-
----
-
-# Author
-
-**Kiran Pamidipalli**
-
-Cybersecurity / SOC Analyst
-
-Areas of interest:
-
-* SOC Operations
-* SIEM
-* SOAR
-* Network Security
-* Threat Intelligence
-* Incident Response
-* Security Automation
-* Blue Team Operations
-
----
-
-## Repository
-
-**SOC SOAR Deployment Lab**
-
-GitHub:
-
-https://github.com/Pamidipallikiran/soc-soar-deployment
+Licensed under the [MIT License](LICENSE).
