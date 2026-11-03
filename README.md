@@ -45,6 +45,14 @@ Think of a hospital emergency room:
 
 ---
 
+
+
+https://github.com/user-attachments/assets/c55140ab-9795-4388-9a67-8ad91dbbb633
+
+
+
+
+
 ## Architecture
 
 ```mermaid
